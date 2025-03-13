@@ -5,6 +5,8 @@ import json
 
 import os.path
 
+import argparse
+
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -87,9 +89,8 @@ def load_events():
     with open('events.json', 'r', encoding='utf-8') as f:
         return json.load(f)
 
-def add_events_to_google(events):
+def authorise_google():
     SCOPES = ['https://www.googleapis.com/auth/calendar.events']
-    calID = ''
 
     creds = None
 
@@ -111,17 +112,34 @@ def add_events_to_google(events):
         with open('token.json', 'w') as token:
             token.write(creds.to_json())
 
+    return creds
+
+def create_calender_resource(credentials):
+    creds = authorise_google(credentials)
+    if(not creds):
+        raise Exception("credential not found")
+    
     try:
         calendar = build('calendar', 'v3', credentials=creds)
-        
-        old_events = calendar.events().list(
+    except HttpError as error:
+        print('An error occurred: %s' % error)
+
+    return calendar
+
+def clear_google_calendar_events(cal_resource, calID):
+    try:
+        old_events = cal_resource.events().list(
             calendarId=calID
         ).execute()
         for old_event in old_events["items"]:
-            calendar.events().delete(calendarId=calID, eventId=old_event["id"]).execute()
+            cal_resource.events().delete(calendarId=calID, eventId=old_event["id"]).execute()
+    except HttpError as error:
+        print('An error occurred: %s' % error)
 
+def add_events_to_google(events, cal_resource, calID):
+    try:
         for event in events:
-            calendar.events().insert(
+            cal_resource.events().insert(
                 calendarId=calID,
                 body=event
                             ).execute()
@@ -129,10 +147,29 @@ def add_events_to_google(events):
         print('An error occurred: %s' % error)
 
 def main():
+    parser = argparse.ArgumentParser(
+                    prog='google-event-adder',
+                    description='adds events from formated file for google calendar\n \
+                    usage: \nadd-events filename calendarID'
+                    )
+    
+    parser.add_argument('filename')
+    parser.add_argument('calendarID')
+
+    args = parser.parse_args()
+
+    filename = args.filename
+    calID = args.calendarID
+
     lines = trim_lines(split_lines(read_raw_s("s.txt")))
     save_events(make_events(lines))
     events = load_events()
-    add_events_to_google(events)
+
+    creds = authorise_google()
+    cal_resource = create_calender_resource(creds)
+
+    clear_google_calendar_events(cal_resource, calID)
+    add_events_to_google(events, cal_resource, calID)
 
 if __name__ == "__main__":
     main()
