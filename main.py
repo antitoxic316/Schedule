@@ -39,47 +39,58 @@ def trim_lines(lines):
                 lines[i][DAYS_IND] = lines[i][DAYS_IND].replace(j, "")
     return lines
 
+def parse_event_time(line, date):
+    try:
+        year = date.split(".")[2]
+        day = date.split(".")[0]
+        month = date.split(".")[1]
+        stHour =    int(line[0].split("-")[0].split(":")[0])
+        if stHour < 10: stHour = "0" + str(stHour)
+        stMinutes = line[0].split("-")[0].split(":")[1]
+        enHour =    int(line[0].split("-")[1].split(":")[0])
+        if enHour < 10: enHour = "0" + str(enHour)
+        enMinutes = line[0].split("-")[1].split(":")[1]
+    except ValueError as e:
+        print(e);
+        print("at")
+        print(line)
+        exit(1)
+
+
+    startTime = f"{year}-{month}-{day}T{stHour}:{stMinutes}:00.000Z"
+    endTime = f"{year}-{month}-{day}T{enHour}:{enMinutes}:00.000Z"
+
+    return [startTime, endTime]
+
 def make_events(lines):
     events = []
     
-
     for line in lines:
         dates = line[-1].split(',')
         for date in dates:
-            gmt = time.localtime(time.time()).tm_hour - time.gmtime().tm_hour
-            year = date.split(".")[2]
-            day = date.split(".")[0]
-            month = date.split(".")[1]
-            stHour =    int(line[0].split("-")[0].split(":")[0])-gmt
-            if stHour < 10: stHour = "0" + str(stHour)
-            stMinutes = line[0].split("-")[0].split(":")[1]
-            enHour =    int(line[0].split("-")[1].split(":")[0])-gmt
-            if enHour < 10: enHour = "0" + str(enHour)
-            enMinutes = line[0].split("-")[1].split(":")[1]
-            # google calendar adds time to the event's time so i am taking it back here
+            startTime, endTime = parse_event_time(line, date)
 
-            startTime = f"{year}-{month}-{day}T{stHour}:{stMinutes}:00.000Z"
-            endTime = f"{year}-{month}-{day}T{enHour}:{enMinutes}:00.000Z"
             events.append({
-                            'summary': line[1],
-                            'location': '',
-                            'description': line[2],
-                            'start': {
-                                'dateTime': startTime,
-                                'timeZone': 'GMT+01:00'
-                            },
-                            'end': {
-                                'dateTime': endTime,
-                                'timeZone': 'GMT+01:00'
-                            },
-                            'reminders': {
-                                'useDefault': False,
-                                'overrides': [
-                                {'method': 'popup', 'minutes': '30'}
-                                ]
-                            }
-                        })
+                'summary': line[1],
+                'location': '',
+                'description': line[2],
+                'start': {
+                    'dateTime': startTime,
+                    'timeZone': 'Europe/Warsaw'
+                },
+                'end': {
+                    'dateTime': endTime,
+                    'timeZone': 'Europe/Warsaw'
+                },
+                'reminders': {
+                    'useDefault': False,
+                    'overrides': [
+                    {'method': 'popup', 'minutes': '30'}
+                    ]
+                }
+            })
     return events
+    
 
 def save_events(events):
     with open('events.json', 'w', encoding='utf-8') as f:
@@ -114,11 +125,7 @@ def authorise_google():
 
     return creds
 
-def create_calender_resource(credentials):
-    creds = authorise_google(credentials)
-    if(not creds):
-        raise Exception("credential not found")
-    
+def create_calender_resource(creds):
     try:
         calendar = build('calendar', 'v3', credentials=creds)
     except HttpError as error:
@@ -127,6 +134,7 @@ def create_calender_resource(credentials):
     return calendar
 
 def clear_google_calendar_events(cal_resource, calID):
+    print("CLEARING OLD EVENTS")
     try:
         old_events = cal_resource.events().list(
             calendarId=calID
@@ -137,8 +145,10 @@ def clear_google_calendar_events(cal_resource, calID):
         print('An error occurred: %s' % error)
 
 def add_events_to_google(events, cal_resource, calID):
+    print("INSERTING EVENTS")
     try:
         for event in events:
+            print(event)
             cal_resource.events().insert(
                 calendarId=calID,
                 body=event
@@ -161,7 +171,7 @@ def main():
     filename = args.filename
     calID = args.calendarID
 
-    lines = trim_lines(split_lines(read_raw_s("s.txt")))
+    lines = trim_lines(split_lines(read_raw_s(filename)))
     save_events(make_events(lines))
     events = load_events()
 
