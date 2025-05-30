@@ -57,8 +57,8 @@ def parse_event_time(line, date):
         exit(1)
 
 
-    startTime = f"{year}-{month}-{day}T{stHour}:{stMinutes}:00.000Z"
-    endTime = f"{year}-{month}-{day}T{enHour}:{enMinutes}:00.000Z"
+    startTime = f"{year}-{month}-{day}T{stHour}:{stMinutes}:00"
+    endTime = f"{year}-{month}-{day}T{enHour}:{enMinutes}:00"
 
     return [startTime, endTime]
 
